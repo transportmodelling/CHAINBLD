@@ -19,36 +19,57 @@ uses
   PropSet,
   Parse,
   ArrayHlp,
-  matio,matio.Formats,matio.Text,
+  matio, matio.Formats, matio.Text,
   Chain in 'Chain.pas';
 
 Type
-  TLoSTChainBuilder = Class(TChainBuilder)
+  TSkimVar = Class(TConnection)
+  private
+    FSkimVar: Float64;
+  public
+    Constructor Create(SkimVar: Float64);
+    Function Impedance: Float64; override;
+  end;
+
+Constructor TSkimVar.Create(SkimVar: Float64);
+begin
+  inherited Create;
+  FSkimvar := Skimvar;
+end;
+
+Function TSkimVar.Impedance: Float64;
+begin
+  Result := FSkimVar;
+end;
+
+////////////////////////////////////////////////////////////////////////////////
+
+Type
+  TLoSChainBuilder = Class(TChainBuilder<TSkimVar>)
   private
     Const
       InfProxy = 0.0;
-    Var
-      Impedances: array {mode} of array {from node} of TFloat64MatrixRow;
   strict protected
-    Function Impedance(const FromNode,ToNode,Mode: Integer): Float64; override;
     Function TransferPenalty(const Node,FromMode,ToMode: Integer): Float64; override;
   public
     Constructor Create(const NNodes: Integer; const [ref] ControlFile: TPropertySet);
   end;
 
-Constructor TLoSTChainBuilder.Create(const NNodes: Integer; const [ref] ControlFile: TPropertySet);
+Constructor TLoSChainBuilder.Create(const NNodes: Integer; const [ref] ControlFile: TPropertySet);
 begin
   inherited Create(NNodes,ControlFile.Parse('TYPES').ToStrArray);
-  // Read impedances
-  SetLength(Impedances,Length(Modes),NNodes);
-  for var Mode := low(Modes) to high(Modes) do
+  // Read connections
+  for var Mode := 0 to NModes-1 do
   begin
     var Reader := MatrixFormats.CreateReader(ControlFile['IMP'+Modes[Mode]]);
     try
+      var Impedances := TMatrixRow.Create(NNodes);
       for var FromNode := 0 to NNodes-1 do
       begin
-        Impedances[Mode,FromNode].Length := NNodes;
-        Reader.Read([Impedances[Mode,FromNode]])
+        Reader.Read([Impedances]);
+        for var ToNode := 0 to NNodes-1 do
+        if Impedances[ToNode] <> InfProxy then
+        Connections[Mode,FromNode,ToNode] := TSkimVar.Create(Impedances[ToNode])
       end;
     finally
       Reader.Free;
@@ -56,13 +77,7 @@ begin
   end;
 end;
 
-Function TLoSTChainBuilder.Impedance(const FromNode,ToNode,Mode: Integer): Float64;
-begin
-  Result := Impedances[Mode,FromNode,ToNode];
-  if Result = InfProxy then Result := Infinity;
-end;
-
-Function TLoSTChainBuilder.TransferPenalty(const Node,FromMode,ToMode: Integer): Float64;
+Function TLoSChainBuilder.TransferPenalty(const Node,FromMode,ToMode: Integer): Float64;
 begin
   Result := 0.0;
 end;
@@ -72,7 +87,7 @@ end;
 Var
   ControlFile: TPropertySet;
   ChainWriter: TStreamWriter;
-  ChainBuilder: TLoSTChainBuilder;
+  ChainBuilder: TLoSChainBuilder;
 begin
   if ParamCount > 0 then
   begin
@@ -96,7 +111,7 @@ begin
         ChainBuilder := nil;
         try
           ChainWriter := TStreamWriter.Create(ControlFile.ToPath('CHAINS'));
-          ChainBuilder := TLoSTChainBuilder.Create(NNodes,ControlFile);
+          ChainBuilder := TLoSChainBuilder.Create(NNodes,ControlFile);
           for var Origin := 0 to NNodes-1 do
           begin
             ChainBuilder.BuildChains(Origin);
@@ -113,10 +128,10 @@ begin
                 ChainWriter.Write(ChainBuilder.ChainTypes[ChainType]);
                 ChainWriter.Write(#9);
                 ChainWriter.Write(FormatFloat('0.###',Chain.Impedance));
-                for var Leg := 0 to Chain.NLegs do
+                for var Node := 0 to Chain.NNodes-1 do
                 begin
                   ChainWriter.Write(#9);
-                  ChainWriter.Write(Chain.Nodes[Leg]+1);
+                  ChainWriter.Write(Chain.Nodes[Node]+1);
                 end;
                 ChainWriter.WriteLine;
               end;
