@@ -1,0 +1,6 @@
+[submodule "Dependencies/Utils"]
+	path = Dependencies/Utils
+	url = https://github.com/transportmodelling/Utils
+[submodule "Dependencies/matio"]
+	path = Dependencies/matio
+	url = https://github.com/transportmodelling/matio
