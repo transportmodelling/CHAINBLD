@@ -16,6 +16,7 @@ uses
   SysUtils,
   IOUtils,
   Math,
+  Ctl, Log,
   PropSet,
   Parse,
   ArrayHlp,
@@ -52,16 +53,16 @@ Type
   strict protected
     Function TransferPenalty(const Node,FromMode,ToMode: Integer): Float64; override;
   public
-    Constructor Create(const NNodes: Integer; const [ref] ControlFile: TPropertySet);
+    Constructor Create(const NNodes: Integer);
   end;
 
-Constructor TLoSChainBuilder.Create(const NNodes: Integer; const [ref] ControlFile: TPropertySet);
+Constructor TLoSChainBuilder.Create(const NNodes: Integer);
 begin
-  inherited Create(NNodes,ControlFile.Parse('TYPES').ToStrArray);
+  inherited Create(NNodes,CtlFile.Parse('TYPES').ToStrArray);
   // Read connections
   for var Mode := 0 to NModes-1 do
   begin
-    var Reader := MatrixFormats.CreateReader(ControlFile['IMP'+Modes[Mode]]);
+    var Reader := MatrixFormats.CreateReader(CtlFile.InpProperties('IMP'+Modes[Mode]));
     try
       var Impedances := TMatrixRow.Create(NNodes);
       for var FromNode := 0 to NNodes-1 do
@@ -85,33 +86,31 @@ end;
 ////////////////////////////////////////////////////////////////////////////////
 
 Var
-  ControlFile: TPropertySet;
   ChainWriter: TStreamWriter;
   ChainBuilder: TLoSChainBuilder;
 begin
   if ParamCount > 0 then
   begin
-    var ControlFileName := ExpandFileName(ParamStr(1));
-    if FileExists(ControlFileName) then
+    var ControlFileName := ParamStr(1);
+    if CtlFile.Read(ControlFileName) then
     begin
-      var BaseDir := IncludeTrailingPathDelimiter(ExtractFileDir(ControlFileName));
-      FormatSettings.DecimalSeparator := '.';
-      // All relative paths are supposed to be relative to the control file path!
-      TPropertySet.BaseDirectory := BaseDir;
-      TTextMatrixWriter.RowLabel := 'Orig';
-      TTextMatrixWriter.ColumnLabel := 'Dest';
+      ChainWriter := nil;
+      ChainBuilder := nil;
       try
-        // Read control file
-        ControlFile.NameValueSeparator := ':';
-        ControlFile.PropertiesSeparator := ';';
-        ControlFile.AsStrings := TFile.ReadAllLines(ControlFileName);
-        // Create chains
-        var NNodes := ControlFile.ToInt('NNODES');
-        ChainWriter := nil;
-        ChainBuilder := nil;
         try
-          ChainWriter := TStreamWriter.Create(ControlFile.ToPath('CHAINS'));
-          ChainBuilder := TLoSChainBuilder.Create(NNodes,ControlFile);
+          // Global settings
+          SetExceptionMask( [exPrecision,exUnderflow,exDenormalized]);
+          FormatSettings.DecimalSeparator := '.';
+          TTextMatrixWriter.RowLabel := 'Orig';
+          TTextMatrixWriter.ColumnLabel := 'Dest';
+          // Open log file
+          LogFile := TLogFile.Create(CtlFile.ToFileName('LOG'),true);
+          LogFile.Log('Ctl-file',ExpandFileName(ControlFileName));
+          LogFile.Log;
+          // Create chains
+          var NNodes := CtlFile.ToInt('NNODES');
+          ChainWriter := TStreamWriter.Create(CtlFile.ToPath('CHAINS'));
+          ChainBuilder := TLoSChainBuilder.Create(NNodes);
           for var Origin := 0 to NNodes-1 do
           begin
             ChainBuilder.BuildChains(Origin);
@@ -137,19 +136,24 @@ begin
               end;
             end;
           end;
-        finally
-          ChainBuilder.Free;
-          ChainWriter.Free;
+        except
+          on E: Exception do
+          begin
+            ExitCode := 1;
+            if LogFile <> nil then
+            begin
+              LogFile.Log;
+              Logfile.Log(E)
+            end else
+              writeln('ERROR: ' + E.Message);
+          end;
         end;
-      except
-        on E: Exception do
-        begin
-          ExitCode := 1;
-          writeln('ERROR: ' + E.Message);
-        end;
+      finally
+        ChainWriter.Free;
+        ChainBuilder.Free;
+        LogFile.Free;
       end;
-    end else
-      writeln('Control file does not exist');
+    end
   end else
-    writeln('Usage CHAINBLD <control file>');
+    writeln('Usage: ',ExtractFileName(ParamStr(0)),' "<control-file-name>"');
 end.
