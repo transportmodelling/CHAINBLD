@@ -1,0 +1,11 @@
+START 1/27/2025 4:08:57 PM
+Executable: CHAINBLD.exe; 1/27/2025 4:07:03 PM; 2275328 bytes
+Computer: PC04-SIG
+Ctl-file: F:\Repos\CHAINBLD\Example\CHAINBLD.ctl; 1/27/2025 4:08:52 PM; 190 bytes
+
+
+Input files:
+IMP1: F:\Repos\CHAINBLD\Example\input\Imp1.dat; 11/27/2024 11:30:07 AM; 351 bytes
+IMP2: F:\Repos\CHAINBLD\Example\input\Imp2.dat; 11/27/2024 11:30:07 AM; 43 bytes
+
+STOP 1/27/2025 4:08:57 PM (Run time: 00:00:00)

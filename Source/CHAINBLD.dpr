@@ -86,6 +86,7 @@ end;
 ////////////////////////////////////////////////////////////////////////////////
 
 Var
+  Chain: TChain<TSkimVar>;
   ChainWriter: TStreamWriter;
   ChainBuilder: TLoSChainBuilder;
 begin
@@ -117,7 +118,7 @@ begin
             for var Destination := 0 to NNodes-1 do
             for var ChainType := 0 to ChainBuilder.NChainTypes-1 do
             begin
-              var Chain := ChainBuilder[ChainType,Destination];
+              ChainBuilder.GetChain(ChainType,Destination,Chain);
               if Chain.Sensible then
               begin
                 ChainWriter.Write(Origin+1);
